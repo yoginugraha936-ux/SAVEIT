@@ -8,10 +8,29 @@ const { v4: uuidv4 } = require('uuid');
 const app = express();
 const PORT = process.env.PORT || 3000;
 
+// Resolve ffmpeg binary
+let ffmpegPath = null;
+try {
+  const ffmpegStatic = require('ffmpeg-static');
+  if (ffmpegStatic && fs.existsSync(ffmpegStatic)) {
+    ffmpegPath = ffmpegStatic;
+  }
+} catch (e) {}
+
+// Resolve yt-dlp binary
+function getYtDlpPath() {
+  const localWin = path.join(__dirname, 'yt-dlp.exe');
+  const localLinux = path.join(__dirname, 'yt-dlp');
+  if (fs.existsSync(localWin)) return localWin;
+  if (fs.existsSync(localLinux)) return localLinux;
+  return 'yt-dlp';
+}
+
 // Middleware
 app.use(cors());
 app.use(express.json());
 app.use(express.static(path.join(__dirname, 'public')));
+app.use(express.static(__dirname));
 
 // Ensure downloads directory exists
 const DOWNLOADS_DIR = path.join(__dirname, 'downloads');
@@ -19,10 +38,10 @@ if (!fs.existsSync(DOWNLOADS_DIR)) {
   fs.mkdirSync(DOWNLOADS_DIR, { recursive: true });
 }
 
-// Clean up old files periodically (every 30 minutes)
+// Clean up old files periodically (every 15 minutes)
 setInterval(() => {
   cleanupDownloads();
-}, 30 * 60 * 1000);
+}, 15 * 60 * 1000);
 
 function cleanupDownloads() {
   try {
@@ -31,8 +50,8 @@ function cleanupDownloads() {
     for (const file of files) {
       const filePath = path.join(DOWNLOADS_DIR, file);
       const stat = fs.statSync(filePath);
-      // Delete files older than 1 hour
-      if (now - stat.mtimeMs > 60 * 60 * 1000) {
+      // Delete files older than 30 minutes
+      if (now - stat.mtimeMs > 30 * 60 * 1000) {
         fs.unlinkSync(filePath);
         console.log(`Cleaned up: ${file}`);
       }
@@ -43,9 +62,15 @@ function cleanupDownloads() {
 }
 
 // Helper: run yt-dlp command
-function runYtDlp(args) {
+function runYtDlp(customArgs) {
   return new Promise((resolve, reject) => {
-    const proc = spawn('yt-dlp', args, { windowsHide: true });
+    const bin = getYtDlpPath();
+    const args = [...customArgs];
+    if (ffmpegPath && !args.includes('--ffmpeg-location')) {
+      args.unshift('--ffmpeg-location', path.dirname(ffmpegPath));
+    }
+
+    const proc = spawn(bin, args, { windowsHide: true });
     let stdout = '';
     let stderr = '';
 
@@ -61,14 +86,14 @@ function runYtDlp(args) {
     });
 
     proc.on('error', (err) => {
-      reject(new Error(`Failed to run yt-dlp: ${err.message}. Make sure yt-dlp is installed.`));
+      reject(new Error(`Failed to run yt-dlp: ${err.message}`));
     });
 
-    // Timeout after 120 seconds
+    // Timeout after 180 seconds
     setTimeout(() => {
       proc.kill();
       reject(new Error('Request timed out'));
-    }, 120000);
+    }, 180000);
   });
 }
 
@@ -89,11 +114,9 @@ app.post('/api/info', async (req, res) => {
     ]);
 
     const info = JSON.parse(output);
-
-    // Parse available formats
     const formats = (info.formats || []);
 
-    // Get video formats (with both video and audio, or video only)
+    // Get video formats
     const videoFormats = formats
       .filter(f => f.vcodec && f.vcodec !== 'none' && f.height)
       .map(f => ({
@@ -111,7 +134,7 @@ app.post('/api/info', async (req, res) => {
       }))
       .sort((a, b) => (b.height || 0) - (a.height || 0));
 
-    // Deduplicate by quality, keeping the best for each resolution
+    // Deduplicate by quality
     const seenQualities = new Set();
     const uniqueVideoFormats = videoFormats.filter(f => {
       if (seenQualities.has(f.quality)) return false;
@@ -150,15 +173,13 @@ app.post('/api/info', async (req, res) => {
     res.json(result);
   } catch (err) {
     console.error('Info error:', err.message);
-    res.status(500).json({ error: 'Failed to fetch video info. Please check the URL and try again.' });
+    res.status(500).json({ error: 'Gagal mengambil info video. Pastikan link video valid dan tidak di-private.' });
   }
 });
 
 // API: Download video/audio
 app.post('/api/download', async (req, res) => {
   const { url, mode, quality } = req.body;
-  // mode: 'video' | 'video_audio' | 'audio'
-  // quality: e.g., '1080', '720', '480', '360', 'best'
 
   if (!url || !mode) {
     return res.status(400).json({ error: 'URL and mode are required' });
@@ -166,13 +187,10 @@ app.post('/api/download', async (req, res) => {
 
   const fileId = uuidv4();
   let args = [];
-  let outputTemplate = '';
-  let expectedExt = '';
+  let outputTemplate = path.join(DOWNLOADS_DIR, `${fileId}.%(ext)s`);
 
   switch (mode) {
     case 'video':
-      // Video only (no audio)
-      outputTemplate = path.join(DOWNLOADS_DIR, `${fileId}.%(ext)s`);
       if (quality && quality !== 'best') {
         args = [
           '-f', `bestvideo[height<=${quality}]`,
@@ -193,8 +211,6 @@ app.post('/api/download', async (req, res) => {
       break;
 
     case 'video_audio':
-      // Video + Audio merged (best quality)
-      outputTemplate = path.join(DOWNLOADS_DIR, `${fileId}.%(ext)s`);
       if (quality && quality !== 'best') {
         args = [
           '-f', `bestvideo[height<=${quality}]+bestaudio/best[height<=${quality}]`,
@@ -214,12 +230,9 @@ app.post('/api/download', async (req, res) => {
           url
         ];
       }
-      expectedExt = 'mp4';
       break;
 
     case 'audio':
-      // Audio only, extract to mp3
-      outputTemplate = path.join(DOWNLOADS_DIR, `${fileId}.%(ext)s`);
       args = [
         '-f', 'bestaudio',
         '-x',
@@ -230,15 +243,13 @@ app.post('/api/download', async (req, res) => {
         '-o', outputTemplate,
         url
       ];
-      expectedExt = 'mp3';
       break;
 
     default:
-      return res.status(400).json({ error: 'Invalid mode' });
+      return res.status(400).json({ error: 'Mode tidak valid' });
   }
 
   try {
-    // First, get the title for the filename
     let title = 'download';
     try {
       const infoOutput = await runYtDlp([
@@ -248,16 +259,13 @@ app.post('/api/download', async (req, res) => {
         url
       ]);
       title = infoOutput.replace(/[<>:"/\\|?*]/g, '_').substring(0, 100);
-    } catch (e) {
-      // ignore, use default title
-    }
+    } catch (e) {}
 
     await runYtDlp(args);
 
-    // Find the downloaded file
     const files = fs.readdirSync(DOWNLOADS_DIR).filter(f => f.startsWith(fileId));
     if (files.length === 0) {
-      return res.status(500).json({ error: 'Download failed - file not found' });
+      return res.status(500).json({ error: 'File hasil download tidak ditemukan' });
     }
 
     const downloadedFile = files[0];
@@ -265,7 +273,6 @@ app.post('/api/download', async (req, res) => {
     const ext = path.extname(downloadedFile);
     const downloadName = `${title}${ext}`;
 
-    // Stream the file to the client
     res.setHeader('Content-Disposition', `attachment; filename="${encodeURIComponent(downloadName)}"`);
     res.setHeader('Content-Type', 'application/octet-stream');
 
@@ -276,45 +283,30 @@ app.post('/api/download', async (req, res) => {
     stream.pipe(res);
 
     stream.on('end', () => {
-      // Clean up the file after sending
       setTimeout(() => {
-        try { fs.unlinkSync(filePath); } catch (e) { /* ignore */ }
+        try { fs.unlinkSync(filePath); } catch (e) {}
       }, 5000);
     });
 
   } catch (err) {
     console.error('Download error:', err.message);
-    res.status(500).json({ error: `Download failed: ${err.message}` });
+    res.status(500).json({ error: `Download gagal: ${err.message}` });
   }
 });
 
-// Serve the frontend
+// Serve frontend
 app.get('*', (req, res) => {
-  res.sendFile(path.join(__dirname, 'public', 'index.html'));
+  const publicIndex = path.join(__dirname, 'public', 'index.html');
+  const rootIndex = path.join(__dirname, 'index.html');
+  if (fs.existsSync(publicIndex)) {
+    res.sendFile(publicIndex);
+  } else {
+    res.sendFile(rootIndex);
+  }
 });
 
 app.listen(PORT, () => {
-  console.log(`\n🚀 SaveIt Video Downloader running at http://localhost:${PORT}\n`);
-
-  // Check if yt-dlp is installed
-  const check = spawn('yt-dlp', ['--version'], { windowsHide: true });
-  check.on('error', () => {
-    console.warn('⚠️  yt-dlp is not installed! Please install it:');
-    console.warn('   pip install yt-dlp');
-    console.warn('   or download from: https://github.com/yt-dlp/yt-dlp/releases\n');
-  });
-  check.stdout.on('data', (data) => {
-    console.log(`✅ yt-dlp version: ${data.toString().trim()}`);
-  });
-
-  // Check if ffmpeg is installed
-  const ffcheck = spawn('ffmpeg', ['-version'], { windowsHide: true });
-  ffcheck.on('error', () => {
-    console.warn('⚠️  ffmpeg is not installed! Needed for merging video+audio and audio extraction.');
-    console.warn('   Download from: https://ffmpeg.org/download.html\n');
-  });
-  ffcheck.stdout.on('data', (data) => {
-    const ver = data.toString().split('\n')[0];
-    console.log(`✅ ${ver}`);
-  });
+  console.log(`\n🚀 SaveIt Video Downloader running on port ${PORT}\n`);
+  console.log(`FFmpeg: ${ffmpegPath ? 'Embedded (ffmpeg-static)' : 'System'}`);
+  console.log(`yt-dlp: ${getYtDlpPath()}`);
 });
