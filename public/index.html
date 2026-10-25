@@ -1,0 +1,214 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>SaveIt — Download Video dari Semua Platform</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="style.css">
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>⬇️</text></svg>">
+</head>
+<body>
+  <!-- Animated background -->
+  <div class="bg-animation">
+    <div class="bg-gradient"></div>
+    <div class="bg-grid"></div>
+  </div>
+
+  <!-- Main container -->
+  <div class="container">
+    <!-- Header -->
+    <header class="header">
+      <div class="logo">
+        <div class="logo-icon">
+          <svg viewBox="0 0 48 48" fill="none" xmlns="http://www.w3.org/2000/svg">
+            <rect width="48" height="48" rx="12" fill="url(#grad1)"/>
+            <path d="M24 12V30M24 30L17 23M24 30L31 23" stroke="white" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/>
+            <path d="M14 34H34" stroke="white" stroke-width="3" stroke-linecap="round"/>
+            <defs>
+              <linearGradient id="grad1" x1="0" y1="0" x2="48" y2="48">
+                <stop stop-color="#6366f1"/>
+                <stop offset="1" stop-color="#a855f7"/>
+              </linearGradient>
+            </defs>
+          </svg>
+        </div>
+        <div>
+          <h1 class="logo-text">SaveIt</h1>
+          <p class="logo-sub">Video Downloader</p>
+        </div>
+      </div>
+      <p class="header-desc">Download video berkualitas tinggi dari <strong>YouTube, Instagram, TikTok, Facebook, Twitter/X</strong>, dan 1000+ platform lainnya.</p>
+    </header>
+
+    <!-- URL Input Section -->
+    <section class="input-section">
+      <div class="input-wrapper">
+        <div class="input-icon">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/>
+            <path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/>
+          </svg>
+        </div>
+        <input type="url" id="urlInput" placeholder="Paste link video di sini..." autocomplete="off" spellcheck="false">
+        <button id="fetchBtn" onclick="fetchVideoInfo()">
+          <span class="btn-text">Cari Video</span>
+          <span class="btn-loader" style="display:none;">
+            <svg class="spinner" viewBox="0 0 24 24">
+              <circle cx="12" cy="12" r="10" stroke="currentColor" stroke-width="3" fill="none" stroke-dasharray="30 60"/>
+            </svg>
+          </span>
+        </button>
+      </div>
+      <div class="supported-platforms">
+        <span>Didukung:</span>
+        <div class="platform-tags">
+          <span class="tag">YouTube</span>
+          <span class="tag">Instagram</span>
+          <span class="tag">TikTok</span>
+          <span class="tag">Facebook</span>
+          <span class="tag">Twitter/X</span>
+          <span class="tag">Reddit</span>
+          <span class="tag">Vimeo</span>
+          <span class="tag">Dailymotion</span>
+          <span class="tag">1000+ lainnya</span>
+        </div>
+      </div>
+    </section>
+
+    <!-- Error Message -->
+    <div id="errorMsg" class="error-msg" style="display:none;"></div>
+
+    <!-- Video Info Section -->
+    <section id="videoInfo" class="video-info" style="display:none;">
+      <div class="video-preview">
+        <div class="thumbnail-wrapper">
+          <img id="thumbnail" src="" alt="Video thumbnail">
+          <div class="duration-badge" id="durationBadge"></div>
+        </div>
+        <div class="video-details">
+          <h2 id="videoTitle" class="video-title"></h2>
+          <div class="video-meta">
+            <span id="videoUploader" class="meta-item">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
+              <span></span>
+            </span>
+            <span id="videoViews" class="meta-item">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
+              <span></span>
+            </span>
+            <span id="videoPlatform" class="meta-item platform-badge">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="3" width="20" height="14" rx="2"/><path d="M8 21h8"/><path d="M12 17v4"/></svg>
+              <span></span>
+            </span>
+          </div>
+        </div>
+      </div>
+
+      <!-- Download Options -->
+      <div class="download-options">
+        <h3 class="section-title">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
+            <polyline points="7 10 12 15 17 10"/>
+            <line x1="12" y1="15" x2="12" y2="3"/>
+          </svg>
+          Pilih Format Download
+        </h3>
+
+        <!-- Mode Tabs -->
+        <div class="mode-tabs">
+          <button class="mode-tab active" data-mode="video_audio" onclick="selectMode(this)">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="23 7 16 12 23 17 23 7"/><rect x="1" y="5" width="15" height="14" rx="2"/></svg>
+            Video + Audio
+          </button>
+          <button class="mode-tab" data-mode="video" onclick="selectMode(this)">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="2" width="20" height="20" rx="2.18"/><path d="M10 8l6 4-6 4V8z"/></svg>
+            Video Saja
+          </button>
+          <button class="mode-tab" data-mode="audio" onclick="selectMode(this)">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 18V5l12-2v13"/><circle cx="6" cy="18" r="3"/><circle cx="18" cy="16" r="3"/></svg>
+            Audio Saja (MP3)
+          </button>
+        </div>
+
+        <!-- Quality Selection -->
+        <div id="qualitySection" class="quality-section">
+          <label class="quality-label">Kualitas Video:</label>
+          <div class="quality-grid" id="qualityGrid">
+            <!-- Quality options will be populated dynamically -->
+          </div>
+        </div>
+
+        <!-- Download Button -->
+        <button id="downloadBtn" class="download-btn" onclick="startDownload()">
+          <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
+            <polyline points="7 10 12 15 17 10"/>
+            <line x1="12" y1="15" x2="12" y2="3"/>
+          </svg>
+          <span id="downloadBtnText">Download Sekarang</span>
+        </button>
+
+        <!-- Progress -->
+        <div id="progressSection" class="progress-section" style="display:none;">
+          <div class="progress-bar">
+            <div class="progress-fill" id="progressFill"></div>
+          </div>
+          <p class="progress-text" id="progressText">Sedang memproses download...</p>
+        </div>
+      </div>
+    </section>
+
+    <!-- How It Works -->
+    <section class="how-it-works">
+      <h3 class="section-title-center">Cara Menggunakan</h3>
+      <div class="steps-grid">
+        <div class="step-card">
+          <div class="step-number">1</div>
+          <div class="step-icon">
+            <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+              <path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/>
+              <path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/>
+            </svg>
+          </div>
+          <h4>Paste Link</h4>
+          <p>Copy link video dari platform sosial media manapun dan paste di kolom di atas.</p>
+        </div>
+        <div class="step-card">
+          <div class="step-number">2</div>
+          <div class="step-icon">
+            <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+              <circle cx="11" cy="11" r="8"/><path d="M21 21l-4.35-4.35"/>
+            </svg>
+          </div>
+          <h4>Pilih Format</h4>
+          <p>Pilih format yang diinginkan: Video+Audio, Video saja, atau Audio saja (MP3).</p>
+        </div>
+        <div class="step-card">
+          <div class="step-number">3</div>
+          <div class="step-icon">
+            <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+              <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
+              <polyline points="7 10 12 15 17 10"/>
+              <line x1="12" y1="15" x2="12" y2="3"/>
+            </svg>
+          </div>
+          <h4>Download</h4>
+          <p>Klik tombol download dan file akan langsung terunduh ke perangkat kamu.</p>
+        </div>
+      </div>
+    </section>
+
+    <!-- Footer -->
+    <footer class="footer">
+      <p>Made with ❤️ — SaveIt Video Downloader</p>
+      <p class="footer-note">Powered by yt-dlp • Mendukung 1000+ platform</p>
+    </footer>
+  </div>
+
+  <script src="app.js"></script>
+</body>
+</html>
